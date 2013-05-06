@@ -58,12 +58,13 @@ F.write("""
   JOB iperf_report dag/iperf_report.sub
   PARENT iperf_client CHILD iperf_report
 
-  VARS iperf_server iperf_server="%(server)s" max_runtime="3600"
-  VARS iperf_client iperf_server="%(server)s" iperf_client="%(client)s" iperf_client_args="-i 5 -t %(duration)d -p %(port)d"
+  VARS iperf_server iperf_server="%(server_machine)s" max_runtime="%(max_runtime)d"
+  VARS iperf_client iperf_server="%(server_machine)s" iperf_client="%(client_machine)s" iperf_client_args="-i 5 -t %(duration)d -p %(port)d"
 
-""" % {"server": options.server_machine,
-       "client": options.client_machine,
+""" % {"server_machine": options.server_machine,
+       "client_machine": options.client_machine,
        "duration": options.duration,
+       "max_runtime": options.duration*3,
        "port": options.port})
 
 #
@@ -74,7 +75,7 @@ F = file(server_subfile,"w")
 F.write("""
 
   requirements = machine == "$(iperf_server)"
-  executable = %(iperf)s
+  executable = %(iperf_path)s
   arguments = -s -p %(port)d
   output = iperf_server.out
   error = iperf_server.err
@@ -88,7 +89,7 @@ F.write("""
   periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > $(max_runtime)
   queue
 
-""" % {"iperf": iperf_path,
+""" % {"iperf_path": iperf_path,
        "port": options.port})
 
 #
@@ -99,7 +100,7 @@ F = file(client_subfile,"w")
 F.write("""
 
   requirements = machine == "$(iperf_client)"
-  executable = %(iperf)s
+  executable = %(iperf_path)s
   arguments = -c $(iperf_server) $(iperf_client_args)
   output = iperf_client.out
   error = iperf_client.err
@@ -108,7 +109,7 @@ F.write("""
   when_to_transfer_output = on_exit
   queue
 
-""" % {"iperf": iperf_path})
+""" % {"iperf_path": iperf_path})
 
 #
 # The condor job that digests the output of the iperf client
