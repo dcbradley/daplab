@@ -17,6 +17,7 @@ parser.add_option("--base-submit-dir",default=os.getcwd())
 parser.add_option("--server-machine",default=DEFAULT_SERVER)
 parser.add_option("--client-machine",default=DEFAULT_CLIENT)
 parser.add_option("--duration",type="int",default=300,help="How many seconds to run iperf.")
+parser.add_option("--port",type="int",default=5001)
 parser.add_option("--iperf",help="Path of iperf executable.")
 parser.add_option("--report-from",help="Generate a report from iperf output.")
 
@@ -58,11 +59,12 @@ F.write("""
   PARENT iperf_client CHILD iperf_report
 
   VARS iperf_server iperf_server="%(server)s" max_runtime="3600"
-  VARS iperf_client iperf_server="%(server)s" iperf_client="%(client)s" iperf_client_args="-i 5 -t %(duration)d"
+  VARS iperf_client iperf_server="%(server)s" iperf_client="%(client)s" iperf_client_args="-i 5 -t %(duration)d -p %(port)d"
 
 """ % {"server": options.server_machine,
        "client": options.client_machine,
-       "duration": options.duration})
+       "duration": options.duration,
+       "port": options.port})
 
 #
 # The conor job that runs the iperf server
@@ -73,7 +75,7 @@ F.write("""
 
   requirements = machine == "$(iperf_server)"
   executable = %(iperf)s
-  arguments = -s
+  arguments = -s -p %(port)d
   output = iperf_server.out
   error = iperf_server.err
   log = dag/iperf_server.ulog
@@ -86,7 +88,8 @@ F.write("""
   periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > $(max_runtime)
   queue
 
-""" % {"iperf": iperf_path})
+""" % {"iperf": iperf_path,
+       "port": options.port})
 
 #
 # The condor job that runs the iperf client
