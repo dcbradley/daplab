@@ -1,0 +1,164 @@
+#!/usr/bin/env python
+
+DEFAULT_SERVER="komatsu.chtc.wisc.edu"
+DEFAULT_CLIENT="mongo.t2.ucsd.edu"
+
+import os
+import sys
+from optparse import OptionParser
+from IperfReport import IperfReport
+from which import which
+
+path_to_self = os.path.realpath(__file__)
+
+parser = OptionParser()
+
+parser.add_option("--base-submit-dir",default=os.getcwd())
+parser.add_option("--server-machine",default=DEFAULT_SERVER)
+parser.add_option("--client-machine",default=DEFAULT_CLIENT)
+parser.add_option("--duration",type="int",default=300,help="How many seconds to run iperf.")
+parser.add_option("--iperf",help="Path of iperf executable.")
+parser.add_option("--report-from",help="Generate a report from iperf output.")
+
+(options,args) = parser.parse_args()
+
+if options.report_from:
+      report = IperfReport(options.report_from)
+      print report.toPrettyJSON()
+      sys.exit(0)
+
+iperf_path = options.iperf
+if not iperf_path:
+      iperf_path = which("iperf")
+
+basedir = options.base_submit_dir
+
+# create a new test directory
+i = 1
+while 1:
+      testdir = os.path.join(basedir,"iperf_test_" + str(i))
+      if not os.path.isdir( testdir ): break
+      i = i + 1
+
+dagdir = os.path.join(testdir,"dag")
+print "Using directory " + testdir
+os.makedirs(dagdir)
+
+#
+# The DAG that runs the test
+#
+dagfile = os.path.join(dagdir,"iperf.dag")
+F = file(dagfile,"w")
+F.write("""
+
+  JOB iperf_server dag/iperf_server.sub
+  JOB iperf_client dag/iperf_client.sub
+  SCRIPT POST iperf_client dag/iperf_server_stop $RETURN
+  JOB iperf_report dag/iperf_report.sub
+  PARENT iperf_client CHILD iperf_report
+
+  VARS iperf_server iperf_server="%(server)s" max_runtime="3600"
+  VARS iperf_client iperf_server="%(server)s" iperf_client="%(client)s" iperf_client_args="-i 5 -t %(duration)d"
+
+""" % {"server": options.server_machine,
+       "client": options.client_machine,
+       "duration": options.duration})
+
+#
+# The conor job that runs the iperf server
+#
+server_subfile = os.path.join(dagdir,"iperf_server.sub")
+F = file(server_subfile,"w")
+F.write("""
+
+  requirements = machine == "$(iperf_server)"
+  executable = %(iperf)s
+  arguments = -s
+  output = iperf_server.out
+  error = iperf_server.err
+  log = dag/iperf_server.ulog
+  notification = never
+  should_transfer_files = yes
+  when_to_transfer_output = on_exit
+  want_graceful_removal = true
+  # in case something goes wrong, and iperf_server_stop fails to kill us,
+  # configure a timeout
+  periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > $(max_runtime)
+  queue
+
+""" % {"iperf": iperf_path})
+
+#
+# The condor job that runs the iperf client
+#
+client_subfile = os.path.join(dagdir,"iperf_client.sub")
+F = file(client_subfile,"w")
+F.write("""
+
+  requirements = machine == "$(iperf_client)"
+  executable = %(iperf)s
+  arguments = -c $(iperf_server) $(iperf_client_args)
+  output = iperf_client.out
+  error = iperf_client.err
+  notification = never
+  should_transfer_files = yes
+  when_to_transfer_output = on_exit
+  queue
+
+""" % {"iperf": iperf_path})
+
+#
+# The condor job that digests the output of the iperf client
+# and produces a JSON report
+#
+report_subfile = os.path.join(dagdir,"iperf_report.sub")
+F = file(report_subfile,"w")
+F.write("""
+
+  executable = """ + path_to_self + """
+  universe = local
+  arguments = --report-from=iperf_client.out
+  output = iperf_report.out
+  error = iperf_report.err
+  notification = never
+  queue
+
+""")
+
+#
+# The script that stops the iperf server.
+# The simple thing to do would be to use condor_rm to stop it,
+# but that causes the DAG to be considered a failure, so
+# we use condor_ssh_to_job to send a kill signal instead.
+#
+server_stop = os.path.join(dagdir,"iperf_server_stop")
+F = open(server_stop,"w")
+os.chmod(server_stop,0o755)
+F.write("""#!/bin/sh
+
+  JOB_EXIT_STATUS=$1
+
+  die() {
+    echo $1 1>&2
+    exit 1
+  }
+
+  exec >& iperf_server_stop.out
+
+  SERVER_ULOG=dag/iperf_server.ulog
+  [ -f $SERVER_ULOG ] || die "iperf_server.ulog does not exist."
+
+  JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
+
+  [ "$JOBID" != "" ] || die "Failed to find job id in iperf_server.ulog."
+
+  condor_ssh_to_job $JOBID 'kill $_CONDOR_JOB_PIDS'
+
+  exit $JOB_EXIT_STATUS
+
+""")
+
+os.chdir(testdir)
+rc = os.system("condor_submit_dag dag/iperf.dag")
+if rc != 0:
+   sys.exit(1)
