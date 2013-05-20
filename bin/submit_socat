@@ -32,27 +32,28 @@ def get_opts():
 
     path_to_self = os.path.realpath(__file__)
     default_bin_dir = os.path.dirname(path_to_self)
-    default_socat_reporter_path = os.path.join(default_bin_dir, 'SocatReport.py')
+    default_reporter_exec_path = os.path.join(default_bin_dir, 'SocatReport.py')
 
     # Parse options
     parser = OptionParser()
-    parser.add_option("--base-submit-dir",default=os.getcwd())
     parser.add_option("--server-machine",default=default_server)
     parser.add_option("--client-machine",default=default_client)
-    parser.add_option("--port",type="int",default=5001)
-    parser.add_option("--socat-path",help="Path of socat executable")
-    parser.add_option("--socat-reporter-path", default=default_socat_reporter_path, help="Path of socat reporter script")
+    parser.add_option("--transfer-exec-path",help="Path of socat executable")
+    parser.add_option("--reporter-exec-path", default=default_reporter_exec_path, help="Path of socat reporter script")
+
+    parser.add_option("--base-submit-dir",default=os.getcwd())
     parser.add_option("--server-address", default=default_server_address, help="The address on the server to be read from and sent to client")
     parser.add_option("--client-address", default=default_client_address, help="The address on the client to write received data to")
+    parser.add_option("--port",type="int",default=5001)
 
     options, args = parser.parse_args()
 
     # include socat program arguments in the parsed options
-    options.socat_server_args = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options.__dict__)
-    options.socat_client_args = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options.__dict__)
+    options.server_args = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options.__dict__)
+    options.client_args = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options.__dict__)
 
-    if not options.socat_path:
-        options.socat_path = which("socat")
+    if not options.transfer_exec_path:
+        options.transfer_exec_path = which("socat")
 
     return options, args
 
@@ -100,8 +101,8 @@ def create_dagfile(dagdir, options):
 def create_server_subfile(dagdir, options):
     condor_desc = """
     requirements = machine == "{server_machine}"
-    executable = {socat_path}
-    arguments = {socat_server_args}
+    executable = {transfer_exec_path}
+    arguments = {server_args}
     output = socat_server.out
     error = socat_server.err
     log = dag/socat_server.ulog
@@ -142,8 +143,8 @@ def create_wait_subfile(dagdir, options):
 def create_client_subfile(dagdir, options):
     condor_desc = """
     requirements = machine == "{client_machine}"
-    executable = {socat_path}
-    arguments = {socat_client_args}
+    executable = {transfer_exec_path}
+    arguments = {client_args}
     output = socat_client.out
     error = socat_client.err
     notification = never
@@ -160,7 +161,7 @@ def create_client_subfile(dagdir, options):
 
 def create_report_subfile(dagdir, options):
     condor_desc = """
-    executable = {socat_reporter_path}
+    executable = {reporter_exec_path}
     universe = local
     arguments = socat_server.err
     output = socat_report.out
