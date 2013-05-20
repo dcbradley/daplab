@@ -24,8 +24,9 @@ def main():
        sys.exit(1)
 
 def get_opts():
+    # Set default values
     default_server="komatsu.chtc.wisc.edu"
-    default_server_address="/tmp/server_file"
+    default_server_address="./server_file"
     default_client="mongo.t2.ucsd.edu"
     default_client_address="./client_file"
 
@@ -33,8 +34,8 @@ def get_opts():
     default_bin_dir = os.path.dirname(path_to_self)
     default_socat_reporter_path = os.path.join(default_bin_dir, 'SocatReport.py')
 
+    # Parse options
     parser = OptionParser()
-
     parser.add_option("--base-submit-dir",default=os.getcwd())
     parser.add_option("--server-machine",default=default_server)
     parser.add_option("--client-machine",default=default_client)
