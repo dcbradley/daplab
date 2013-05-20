@@ -1,0 +1,6 @@
+{server_machine}     the network address of the server machine
+{client_machine}     the network address of the client machine
+{server_args}        the arguments provided to the socat command on the server
+{client_args}        the arguments provided to the socat command on the client
+{transfer_exec_path} the location of the transfer executable (the program doing the actual moving, i.e. iperf, socat, etc.)
+{reporter_exec_path} the location of the report generating executable (IperfReport.py, SocatReport.py, etc.)
