@@ -27,7 +27,7 @@ def get_opts():
     default_server="komatsu.chtc.wisc.edu"
     default_server_address="/tmp/server_file"
     default_client="mongo.t2.ucsd.edu"
-    default_client_address="/tmp/client_file"
+    default_client_address="./client_file"
 
     path_to_self = os.path.realpath(__file__)
     default_bin_dir = os.path.dirname(path_to_self)
