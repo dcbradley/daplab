@@ -6,8 +6,10 @@ def which(command):
     if dirname:
         path = (dirname)
         command = os.path.basename(command)
-    else:
+    elif "PATH" in os.environ:
         path = os.environ["PATH"].split(os.pathsep)
+    else:
+        path = '/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin'
 
     for p in path:
         f = os.path.join(p,command)
