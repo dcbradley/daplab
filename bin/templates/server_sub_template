@@ -1,0 +1,14 @@
+requirements = machine == "{server_machine}"
+executable = {transfer_exec_path}
+arguments = {server_args}
+output = socat_server.out
+error = socat_server.err
+log = dag/socat_server.ulog
+notification = never
+should_transfer_files = yes
+when_to_transfer_output = on_exit
+want_graceful_removal = true
+# in case something goes wrong, and socat_server_stop fails to kill us,
+# configure a timeout
+periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > 600
+queue

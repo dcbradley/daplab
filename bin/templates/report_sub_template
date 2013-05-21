@@ -1,0 +1,7 @@
+executable = {reporter_exec_path}
+universe = local
+arguments = socat_server.err
+output = socat_report.out
+error = socat_report.err
+notification = never
+queue

@@ -1,0 +1,11 @@
+JOB socat_server dag/socat_server.sub
+
+JOB socat_server_wait dag/socat_server_wait.sub
+ABORT-DAG-ON socat_server_wait 1
+
+JOB socat_client dag/socat_client.sub
+SCRIPT POST socat_client dag/socat_server_stop $RETURN
+PARENT socat_server_wait CHILD socat_client
+
+JOB socat_report dag/socat_report.sub
+PARENT socat_client CHILD socat_report
