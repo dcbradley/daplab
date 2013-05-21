@@ -6,8 +6,8 @@ import os
 from os.path import join as pathjoin
 
 # Try to find utils directory so imports can be made from there
-self_dir= os.path.dirname(__file__)
-util_dir = os.path.join(self_dir, 'utils')
+self_dir = os.path.dirname(__file__)
+util_dir = pathjoin(self_dir, 'utils')
 sys.path.append(util_dir)
 
 from which import which
@@ -38,13 +38,13 @@ def get_opts():
 
     path_to_self = os.path.realpath(__file__)
     default_bin_dir = os.path.dirname(path_to_self)
-    default_util_dir = os.path.join(default_bin_dir, 'utils')
-    default_template_dir = os.path.join(default_bin_dir, 'templates')
+    default_util_dir = pathjoin(default_bin_dir, 'utils')
+    default_template_dir = pathjoin(default_bin_dir, 'templates')
 
     default_transfer_exec_path = which("socat")
-    default_reporter_exec_path = os.path.join(default_util_dir, 'SocatReport.py')
-    default_wait_script_path = os.path.join(default_util_dir, 'wait.sh')
-    default_stop_script_path = os.path.join(default_util_dir, 'stop.sh')
+    default_reporter_exec_path = pathjoin(default_util_dir, 'SocatReport.py')
+    default_wait_script_path = pathjoin(default_util_dir, 'wait.sh')
+    default_stop_script_path = pathjoin(default_util_dir, 'stop.sh')
 
     # Parse options
     parser = OptionParser()
@@ -73,13 +73,13 @@ def get_opts():
 def create_dirs(basedir):
     # create a new test directory so different tests
     # do not stomp on each other
-    testdir = os.path.join(basedir,"socat_test_1")
+    testdir = pathjoin(basedir,"socat_test_1")
     i = 1
     while os.path.isdir( testdir ):
         i += 1
         testdir = testdir[:-1] + str(i)
 
-    dagdir = os.path.join(testdir,"dag")
+    dagdir = pathjoin(testdir,"dag")
     print "Using directory", testdir
 
     # This will fail if there is a race and something else created
@@ -92,7 +92,7 @@ def create_dirs(basedir):
 
 def create_from_template(template_name, output_file_name, dagdir, options):
     # Read the content of the template file into the variable template
-    template_file = os.path.join(options.template_dir, template_name)
+    template_file = pathjoin(options.template_dir, template_name)
     with open(template_file) as f:
         template = f.read()
 
@@ -100,7 +100,7 @@ def create_from_template(template_name, output_file_name, dagdir, options):
     output = template.format(**options.__dict__)
 
     # Write the filled in template to the dagdir
-    output_file = os.path.join(dagdir, output_file_name)
+    output_file = pathjoin(dagdir, output_file_name)
     with open(output_file, 'w') as f:
         f.write(output)
 
