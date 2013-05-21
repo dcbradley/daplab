@@ -3,6 +3,7 @@
 import sys
 from optparse import OptionParser
 import os
+from os.path import join as pathjoin
 
 # Try to find utils directory so imports can be made from there
 self_dir= os.path.dirname(__file__)
