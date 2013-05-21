@@ -7,14 +7,15 @@ import sys
 def create_dirs(options):
     # create a new test directory so different tests
     # do not stomp on each other
-    testdir = pathjoin(options['base_submit_dir'], "socat_test_1")
+    testdir_basename = options['transfer_name']+'_test_1'
+    testdir = pathjoin(options['base_submit_dir'], testdir_basename)
     i = 1
     while os.path.isdir( testdir ):
         i += 1
         testdir = testdir[:-1] + str(i)
 
-    dagdir = pathjoin(testdir,"dag")
-    print "Using directory", testdir
+    dagdir = pathjoin(testdir,'dag')
+    print 'Using directory', testdir
 
     # This will fail if there is a race and something else created
     # the test directory before we do.  Better to fail than to go
@@ -27,11 +28,12 @@ def create_dirs(options):
     options['dagdir'] = dagdir
 
 def fill_templates(options):
-    options['dagfile'] = create_from_template("dag_template", "socat.dag", options)
-    options['server_subfile'] = create_from_template("server_sub_template", "socat_server.sub", options)
-    options['client_subfile'] = create_from_template("client_sub_template", "socat_client.sub", options)
-    options['wait_subfile'] = create_from_template("wait_sub_template", "socat_server_wait.sub", options)
-    options['report_subfile'] = create_from_template("report_sub_template", "socat_report.sub", options)
+    name = options['transfer_name']
+    options['dagfile'] = create_from_template('dag_template', name+'.dag', options)
+    options['server_subfile'] = create_from_template('server_sub_template', name+'_server.sub', options)
+    options['client_subfile'] = create_from_template('client_sub_template', name+'_client.sub', options)
+    options['wait_subfile'] = create_from_template('wait_sub_template', name+'_server_wait.sub', options)
+    options['report_subfile'] = create_from_template('report_sub_template', name+'_report.sub', options)
 
 def create_from_template(template_name, output_file_name, options):
     # Read the content of the template file into the variable template
