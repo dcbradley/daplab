@@ -10,7 +10,7 @@ self_dir = os.path.dirname(__file__)
 util_dir = pathjoin(self_dir, 'utils')
 sys.path.append(util_dir)
 
-from daplabutils import create_dirs, fill_templates, submit_dag
+from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts
 from which import which
 
 def main():
@@ -59,6 +59,19 @@ def get_opts():
     # include socat program arguments in the parsed options
     options['server_args'] = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options)
     options['client_args'] = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options)
+
+    # set transfer name to the name of the transfer executable
+    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
+
+    # options that must be defined by this time for successful execution:
+    #   server_machine, client_machine, server_args, client_args
+    #   transfer_exec_path, transfer_name, reporter_exec_path, wait_script, stop_script
+    #   base_submit_dir, template_dir 
+    missing_opts = get_missing_opts(options)
+    if missing_opts:
+        print 'Missing values for the following options:'
+        for opt in missing_opts: print opt
+        sys.exit(1)
 
     return options, args
 
