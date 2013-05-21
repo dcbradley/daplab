@@ -1,8 +1,14 @@
 #!/usr/bin/env python
 
-import os
-from optparse import OptionParser
 import sys
+from optparse import OptionParser
+import os
+
+# Try to find utils directory so imports can be made from there
+self_dir= os.path.dirname(__file__)
+util_dir = os.path.join(self_dir, 'utils')
+sys.path.append(util_dir)
+
 from which import which
 
 def main():
@@ -15,8 +21,6 @@ def main():
     client_subfile = create_from_template("client_sub_template", "socat_client.sub", dagdir, options)
     wait_subfile = create_from_template("wait_sub_template", "socat_server_wait.sub", dagdir, options)
     report_subfile = create_from_template("report_sub_template", "socat_report.sub", dagdir, options)
-    wait_script = create_wait_script(dagdir)
-    stop_script = create_stop_script(dagdir)
 
     # submit the DAG to condor
     os.chdir(testdir)
@@ -33,16 +37,24 @@ def get_opts():
 
     path_to_self = os.path.realpath(__file__)
     default_bin_dir = os.path.dirname(path_to_self)
-    default_reporter_exec_path = os.path.join(default_bin_dir, 'SocatReport.py')
+    default_util_dir = os.path.join(default_bin_dir, 'utils')
     default_template_dir = os.path.join(default_bin_dir, 'templates')
+
+    default_transfer_exec_path = which("socat")
+    default_reporter_exec_path = os.path.join(default_util_dir, 'SocatReport.py')
+    default_wait_script_path = os.path.join(default_util_dir, 'wait.sh')
+    default_stop_script_path = os.path.join(default_util_dir, 'stop.sh')
 
     # Parse options
     parser = OptionParser()
-    parser.add_option("--server-machine",default=default_server)
-    parser.add_option("--client-machine",default=default_client)
-    parser.add_option("--transfer-exec-path",help="Path of socat executable")
-    parser.add_option("--reporter-exec-path", default=default_reporter_exec_path, help="Path of socat reporter script")
+    parser.add_option("--server-machine", default=default_server)
+    parser.add_option("--client-machine", default=default_client)
+
     parser.add_option("--template-dir", default=default_template_dir, help="Path of directory containing templates")
+    parser.add_option("--transfer-exec-path", default=default_transfer_exec_path, help="Path of socat executable")
+    parser.add_option("--reporter-exec-path", default=default_reporter_exec_path, help="Path of socat reporter script")
+    parser.add_option("--wait-script", default=default_wait_script_path, help="Path of script used to have server wait for client")
+    parser.add_option("--stop-script", default=default_stop_script_path, help="Path of script used to stop server")
 
     parser.add_option("--base-submit-dir",default=os.getcwd())
     parser.add_option("--server-address", default=default_server_address, help="The address on the server to be read from and sent to client")
@@ -54,9 +66,6 @@ def get_opts():
     # include socat program arguments in the parsed options
     options.server_args = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options.__dict__)
     options.client_args = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options.__dict__)
-
-    if not options.transfer_exec_path:
-        options.transfer_exec_path = which("socat")
 
     return options, args
 
@@ -95,153 +104,5 @@ def create_from_template(template_name, output_file_name, dagdir, options):
         f.write(output)
 
     return output_file
-
-def create_server_subfile(dagdir, options):
-    condor_desc = """
-    requirements = machine == "{server_machine}"
-    executable = {transfer_exec_path}
-    arguments = {server_args}
-    output = socat_server.out
-    error = socat_server.err
-    log = dag/socat_server.ulog
-    notification = never
-    should_transfer_files = yes
-    when_to_transfer_output = on_exit
-    want_graceful_removal = true
-    # in case something goes wrong, and socat_server_stop fails to kill us,
-    # configure a timeout
-    periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > 600
-    queue
-    """.format(**options.__dict__)
-
-    server_subfile = os.path.join(dagdir,"socat_server.sub")
-    with open(server_subfile, 'w') as f:
-        f.write(condor_desc)
-
-    return server_subfile
-
-def create_wait_subfile(dagdir, options):
-    condor_desc = """
-    universe = local
-    executable = dag/socat_server_wait
-    arguments = dag/socat_server.ulog
-    output = socat_server_wait.out
-    error = socat_server_wait.err
-    log = dag/socat_server_wait.ulog
-    notification = never
-    queue
-    """.format(**options.__dict__)
-
-    wait_subfile = os.path.join(dagdir, "socat_server_wait.sub")
-    with open(wait_subfile, 'w') as f:
-        f.write(condor_desc)
-
-    return wait_subfile
-
-def create_client_subfile(dagdir, options):
-    condor_desc = """
-    requirements = machine == "{client_machine}"
-    executable = {transfer_exec_path}
-    arguments = {client_args}
-    output = socat_client.out
-    error = socat_client.err
-    notification = never
-    should_transfer_files = yes
-    when_to_transfer_output = on_exit
-    queue
-    """.format(**options.__dict__)
-
-    client_subfile = os.path.join(dagdir,"socat_client.sub")
-    with open(client_subfile, 'w') as f:
-        f.write(condor_desc)
-
-    return client_subfile
-
-def create_report_subfile(dagdir, options):
-    condor_desc = """
-    executable = {reporter_exec_path}
-    universe = local
-    arguments = socat_server.err
-    output = socat_report.out
-    error = socat_report.err
-    notification = never
-    queue
-    """.format(**options.__dict__)
-
-    report_subfile = os.path.join(dagdir, "socat_report.sub")
-    with open(report_subfile, 'w') as f:
-        f.write(condor_desc)
-
-    return report_subfile
-
-def create_wait_script(dagdir):
-    script = """#!/bin/sh
-  
-    die() {
-      echo $1 1>&2
-      exit 1
-    }
-  
-    exec >& socat_server_wait.out
-  
-    SERVER_ULOG=$1
-    [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
-
-    JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
-  
-    [ "$JOBID" != "" ] || die "Failed to find job id in socat_server.ulog."
-  
-    # while the server job is idle, wait
-    while [ 1 ]; do
-     status="$(condor_q $JOBID -format '%s\n' JobStatus)"
-     if [ "$status" = 1 ]; then   # idle
-       sleep 2
-     elif [ "$status" = 2 ]; then # running
-       break
-     else                         # held? removed?
-       die "Unexpected server job status $status"
-     fi
-    done
-
-    exit 0
-    """
-
-    wait_script = os.path.join(dagdir, "socat_server_wait")
-    with open(wait_script, 'w') as f:
-        f.write(script)
-    os.chmod(wait_script, 0o755)
-
-    return wait_script
-
-def create_stop_script(dagdir):
-    script = """#!/bin/sh
-
-    JOB_EXIT_STATUS=$1
-  
-    die() {
-      echo $1 1>&2
-      exit 1
-    }
-  
-    exec >& socat_server_stop.out
-  
-    SERVER_ULOG=dag/socat_server.ulog
-    [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
-  
-    JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
-  
-    [ "$JOBID" != "" ] || die "Failed to find job id in socat_server.ulog."
-  
-    condor_ssh_to_job $JOBID 'kill $_CONDOR_JOB_PIDS'
-  
-    exit $JOB_EXIT_STATUS
-    """
-
-    stop_script = os.path.join(dagdir, "socat_server_stop")
-    with open(stop_script, 'w') as f:
-        f.write(script)
-    os.chmod(stop_script, 0o755)
-
-    return stop_script
 
 main()
