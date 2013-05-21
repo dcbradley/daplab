@@ -1,38 +1,40 @@
 #!/usr/bin/env python
 
 import os
-import sys
 from optparse import OptionParser
+import sys
 from which import which
 
 def main():
     options, args = get_opts()
 
     testdir, dagdir = create_dirs(options.base_submit_dir)
-    dagfile = create_dagfile(dagdir, options)    
-    server_subfile = create_server_subfile(dagdir, options)
-    wait_subfile = create_wait_subfile(dagdir, options)
-    client_subfile = create_client_subfile(dagdir, options)
-    report_subfile = create_report_subfile(dagdir, options)
+
+    dagfile = create_from_template("dag_template", "socat.dag", dagdir, options)
+    server_subfile = create_from_template("server_sub_template", "socat_server.sub", dagdir, options)
+    client_subfile = create_from_template("client_sub_template", "socat_client.sub", dagdir, options)
+    wait_subfile = create_from_template("wait_sub_template", "socat_server_wait.sub", dagdir, options)
+    report_subfile = create_from_template("report_sub_template", "socat_report.sub", dagdir, options)
     wait_script = create_wait_script(dagdir)
     stop_script = create_stop_script(dagdir)
 
     # submit the DAG to condor
     os.chdir(testdir)
-    rc = os.system("condor_submit_dag dag/socat.dag")
+    rc = os.system( 'condor_submit_dag {dagfile}'.format(dagfile=dagfile) )
     if rc != 0:
        sys.exit(1)
 
 def get_opts():
     # Set default values
     default_server="komatsu.chtc.wisc.edu"
-    default_server_address="./server_file"
+    default_server_address="/tmp/server_file"
     default_client="mongo.t2.ucsd.edu"
     default_client_address="./client_file"
 
     path_to_self = os.path.realpath(__file__)
     default_bin_dir = os.path.dirname(path_to_self)
     default_reporter_exec_path = os.path.join(default_bin_dir, 'SocatReport.py')
+    default_template_dir = os.path.join(default_bin_dir, 'templates')
 
     # Parse options
     parser = OptionParser()
@@ -40,6 +42,7 @@ def get_opts():
     parser.add_option("--client-machine",default=default_client)
     parser.add_option("--transfer-exec-path",help="Path of socat executable")
     parser.add_option("--reporter-exec-path", default=default_reporter_exec_path, help="Path of socat reporter script")
+    parser.add_option("--template-dir", default=default_template_dir, help="Path of directory containing templates")
 
     parser.add_option("--base-submit-dir",default=os.getcwd())
     parser.add_option("--server-address", default=default_server_address, help="The address on the server to be read from and sent to client")
@@ -67,7 +70,7 @@ def create_dirs(basedir):
         testdir = testdir[:-1] + str(i)
 
     dagdir = os.path.join(testdir,"dag")
-    print "Using directory " + testdir
+    print "Using directory", testdir
 
     # This will fail if there is a race and something else created
     # the test directory before we do.  Better to fail than to go
@@ -77,26 +80,21 @@ def create_dirs(basedir):
 
     return testdir, dagdir
 
-def create_dagfile(dagdir, options):
-    dag = """
-    JOB socat_server dag/socat_server.sub
+def create_from_template(template_name, output_file_name, dagdir, options):
+    # Read the content of the template file into the variable template
+    template_file = os.path.join(options.template_dir, template_name)
+    with open(template_file) as f:
+        template = f.read()
 
-    JOB socat_server_wait dag/socat_server_wait.sub
-    ABORT-DAG-ON socat_server_wait 1
+    # Fill in the template with the chosen options
+    output = template.format(**options.__dict__)
 
-    JOB socat_client dag/socat_client.sub
-    SCRIPT POST socat_client dag/socat_server_stop $RETURN
-    PARENT socat_server_wait CHILD socat_client
+    # Write the filled in template to the dagdir
+    output_file = os.path.join(dagdir, output_file_name)
+    with open(output_file, 'w') as f:
+        f.write(output)
 
-    JOB socat_report dag/socat_report.sub
-    PARENT socat_client CHILD socat_report
-    """.format(**options.__dict__)
-
-    dagfile = os.path.join(dagdir,"socat.dag")
-    with open(dagfile, 'w') as f:
-        f.write(dag)
-
-    return dagfile
+    return output_file
 
 def create_server_subfile(dagdir, options):
     condor_desc = """
