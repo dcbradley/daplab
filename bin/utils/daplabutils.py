@@ -4,6 +4,20 @@ import os
 from os.path import join as pathjoin
 import sys
 
+def get_missing_opts(given_options):
+    required_options = [
+                        'server_machine', 'client_machine', 'server_args', 'client_args',
+                        'transfer_exec_path', 'transfer_name', 'reporter_exec_path', 
+                        'wait_script', 'stop_script', 'base_submit_dir', 'template_dir'
+                       ]
+
+    given_keys = given_options.keys()
+    for opt in required_options:
+        if opt in given_keys:
+            required_options.remove(opt)
+
+    return required_options
+
 def create_dirs(options):
     # create a new test directory so different tests
     # do not stomp on each other
