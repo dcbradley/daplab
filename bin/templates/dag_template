@@ -4,7 +4,7 @@ JOB socat_server_wait dag/socat_server_wait.sub
 ABORT-DAG-ON socat_server_wait 1
 
 JOB socat_client dag/socat_client.sub
-SCRIPT POST socat_client dag/socat_server_stop $RETURN
+SCRIPT POST socat_client {stop_script} $RETURN
 PARENT socat_server_wait CHILD socat_client
 
 JOB socat_report dag/socat_report.sub

@@ -1,5 +1,5 @@
 universe = local
-executable = dag/socat_server_wait
+executable = {wait_script}
 arguments = dag/socat_server.ulog
 output = socat_server_wait.out
 error = socat_server_wait.err
