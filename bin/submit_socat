@@ -10,7 +10,7 @@ self_dir = os.path.dirname(__file__)
 util_dir = pathjoin(self_dir, 'utils')
 sys.path.append(util_dir)
 
-from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts
+from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts, add_common_options
 from which import which
 
 def main():
@@ -20,53 +20,49 @@ def main():
     submit_dag(options)
     
 def get_opts():
-    # Set default values
-    default_server="komatsu.chtc.wisc.edu"
-    default_server_address="/tmp/server_file"
-    default_client="mongo.t2.ucsd.edu"
-    default_client_address="./client_file"
-
     path_to_self = os.path.realpath(__file__)
-    default_bin_dir = os.path.dirname(path_to_self)
-    default_util_dir = pathjoin(default_bin_dir, 'utils')
-    default_template_dir = pathjoin(default_bin_dir, 'templates')
+    bin_dir = os.path.dirname(path_to_self)
+    util_dir = pathjoin(bin_dir, 'utils')
 
-    default_transfer_exec_path = which("socat")
-    default_reporter_exec_path = pathjoin(default_util_dir, 'SocatReport.py')
-    default_wait_script_path = pathjoin(default_util_dir, 'wait.sh')
-    default_stop_script_path = pathjoin(default_util_dir, 'stop.sh')
+    # Set default values
+    defaults = {}
 
-    # Parse options
+    defaults['server_machine']     = "komatsu.chtc.wisc.edu"
+    defaults['client_machine']     = "mongo.t2.ucsd.edu"
+
+    defaults['base_submit_dir']    = os.getcwd()
+    defaults['template_dir']       = pathjoin(bin_dir, 'templates')
+
+    defaults['transfer_exec_path'] = which("socat")
+    defaults['server_args']        = None
+    defaults['client_args']        = None
+
+    defaults['reporter_exec_path'] = pathjoin(util_dir, 'SocatReport.py')
+    defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
+    defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
+
+    defaults['port']               = 5001
+    defaults['server_address']     = "/tmp/server_file"
+    defaults['client_address']     = "./client_file"
+
+    # Add options
     parser = OptionParser()
-    parser.add_option("--server-machine", default=default_server)
-    parser.add_option("--client-machine", default=default_client)
+    add_common_options(parser, defaults)
 
-    parser.add_option("--template-dir", default=default_template_dir, help="Path of directory containing templates")
-    parser.add_option("--transfer-exec-path", default=default_transfer_exec_path, help="Path of socat executable")
-    parser.add_option("--reporter-exec-path", default=default_reporter_exec_path, help="Path of socat reporter script")
-    parser.add_option("--wait-script", default=default_wait_script_path, help="Path of script used to have server wait for client")
-    parser.add_option("--stop-script", default=default_stop_script_path, help="Path of script used to stop server")
+    parser.add_option("--server-address", default=defaults['server_address'], help="Address on server to be read from and sent to client")
+    parser.add_option("--client-address", default=defaults['client_address'], help="Address on client to write received data to")
+    parser.add_option("--port", type="int", default=defaults['port'])
 
-    parser.add_option("--base-submit-dir",default=os.getcwd())
-    parser.add_option("--server-address", default=default_server_address, help="The address on the server to be read from and sent to client")
-    parser.add_option("--client-address", default=default_client_address, help="The address on the client to write received data to")
-    parser.add_option("--port",type="int",default=5001)
-
+    # Parse command line args and turn options object into plain dict, for simplicity and compatibility
     options, args = parser.parse_args()
-    # Use options as a plain dict rather than special object from optparse library, for simplicity and compatibility
     options = options.__dict__
 
-    # include socat program arguments in the parsed options
+    # Add options that were not explicitly in the command line args
+    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
     options['server_args'] = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options)
     options['client_args'] = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options)
 
-    # set transfer name to the name of the transfer executable
-    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
-
-    # options that must be defined by this time for successful execution:
-    #   server_machine, client_machine, server_args, client_args
-    #   transfer_exec_path, transfer_name, reporter_exec_path, wait_script, stop_script
-    #   base_submit_dir, template_dir 
+    # Make sure all options needed for program execution have values
     missing_opts = get_missing_opts(options)
     if missing_opts:
         print 'Missing values for the following options:'
