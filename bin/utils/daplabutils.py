@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from optparse import OptionParser
 import os
 from os.path import join as pathjoin
 import sys
@@ -12,11 +13,26 @@ def get_missing_opts(given_options):
                        ]
 
     given_keys = given_options.keys()
-    for opt in required_options:
-        if opt in given_keys:
-            required_options.remove(opt)
+    for given_key in given_keys:
+        if given_key in required_options:
+            required_options.remove(given_key)
 
     return required_options
+
+def add_common_options(parser, defaults):
+    parser.add_option("--server-machine", default=defaults['server_machine'])
+    parser.add_option("--client-machine", default=defaults['client_machine'])
+
+    parser.add_option("--base-submit-dir", default=defaults['base_submit_dir'])
+    parser.add_option("--template-dir", default=defaults['template_dir'], help="Path of dir containing templates")
+
+    parser.add_option("--transfer-exec-path", default=defaults['transfer_exec_path'], help="Path of transfer executable")
+    parser.add_option("--server-args", default=defaults['server_args'])
+    parser.add_option("--client-args", default=defaults['client_args'])
+
+    parser.add_option("--reporter-exec-path", default=defaults['reporter_exec_path'], help="Path of reporter script")
+    parser.add_option("--wait-script", default=defaults['wait_script'], help="Path of wait script")
+    parser.add_option("--stop-script", default=defaults['stop_script'], help="Path of stop script")
 
 def create_dirs(options):
     # create a new test directory so different tests
