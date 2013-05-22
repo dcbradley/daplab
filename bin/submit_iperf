@@ -38,6 +38,7 @@ def get_opts():
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'IperfReport.py')
+    defaults['reporter_args']      = 'iperf_client.out'
     defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
     defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
 

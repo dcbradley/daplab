@@ -38,6 +38,7 @@ def get_opts():
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'SocatReport.py')
+    defaults['reporter_args']      = 'socat_server.err'
     defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
     defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
 
