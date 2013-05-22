@@ -1,239 +1,72 @@
 #!/usr/bin/env python
 
-DEFAULT_SERVER="komatsu.chtc.wisc.edu"
-DEFAULT_CLIENT="mongo.t2.ucsd.edu"
-
-import os
-import sys
 from optparse import OptionParser
-from IperfReport import IperfReport
+import os
+from os.path import join as pathjoin
+import sys
+
+# find utils directory so imports can be made from there
+self_dir = os.path.dirname(__file__)
+util_dir = pathjoin(self_dir, 'utils')
+sys.path.append(util_dir)
+
+from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts, add_common_options
 from which import which
 
-path_to_self = os.path.realpath(__file__)
+def main():
+    options, args = get_opts()
+    create_dirs(options)
+    fill_templates(options)
+    submit_dag(options)
+    
+def get_opts():
+    path_to_self = os.path.realpath(__file__)
+    bin_dir = os.path.dirname(path_to_self)
+    util_dir = pathjoin(bin_dir, 'utils')
 
-parser = OptionParser()
+    # Set default values
+    defaults = {}
 
-parser.add_option("--base-submit-dir",default=os.getcwd())
-parser.add_option("--server-machine",default=DEFAULT_SERVER)
-parser.add_option("--client-machine",default=DEFAULT_CLIENT)
-parser.add_option("--duration",type="int",default=300,help="How many seconds to run iperf.")
-parser.add_option("--port",type="int",default=5001)
-parser.add_option("--iperf",help="Path of iperf executable.")
-parser.add_option("--report-from",help="Generate a report from iperf output.")
+    defaults['server_machine']     = "komatsu.chtc.wisc.edu"
+    defaults['client_machine']     = "mongo.t2.ucsd.edu"
 
-(options,args) = parser.parse_args()
+    defaults['base_submit_dir']    = os.getcwd()
+    defaults['template_dir']       = pathjoin(bin_dir, 'templates')
 
-if options.report_from:
-      # This option is called internally at the end of the test
-      # to extract data and generate a report.
-      report = IperfReport(options.report_from)
-      print report.toPrettyJSON()
-      sys.exit(0)
+    defaults['transfer_exec_path'] = which("iperf")
+    defaults['server_args']        = None
+    defaults['client_args']        = None
 
-iperf_path = options.iperf
-if not iperf_path:
-      iperf_path = which("iperf")
+    defaults['reporter_exec_path'] = pathjoin(util_dir, 'IperfReport.py')
+    defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
+    defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
 
-basedir = options.base_submit_dir
+    defaults['duration']           = 30
+    defaults['port']               = 5001
 
-# create a new test directory so different tests
-# do not stomp on each other
-i = 1
-while 1:
-      testdir = os.path.join(basedir,"iperf_test_" + str(i))
-      if not os.path.isdir( testdir ): break
-      i = i + 1
+    # Add options
+    parser = OptionParser()
+    add_common_options(parser, defaults)
 
-dagdir = os.path.join(testdir,"dag")
-print "Using directory " + testdir
+    parser.add_option("--duration", default=defaults['duration'])
+    parser.add_option("--port", type="int", default=defaults['port'])
 
-# This will fail if there is a race and something else created
-# the test directory before we do.  Better to fail than to go
-# ahead and use the same directory as a different test instance.
-os.mkdir(testdir)
-os.mkdir(dagdir)
+    # Parse command line args and turn options object into plain dict, for simplicity and compatibility
+    options, args = parser.parse_args()
+    options = options.__dict__
 
-#
-# The DAG that runs the test
-#
-dagfile = os.path.join(dagdir,"iperf.dag")
-F = file(dagfile,"w")
-F.write("""
+    # Add options that were not explicitly in the command line args
+    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
+    options['server_args'] = '-s -p {port}'.format(**options)
+    options['client_args'] = '-c {server_machine} -i 5 -t {duration} -p {port}'.format(**options)
 
-  JOB iperf_server dag/iperf_server.sub
+    # Make sure all options needed for program execution have values
+    missing_opts = get_missing_opts(options)
+    if missing_opts:
+        print 'Missing values for the following options:'
+        for opt in missing_opts: print opt
+        sys.exit(1)
 
-  JOB iperf_server_wait dag/iperf_server_wait.sub
-  ABORT-DAG-ON iperf_server_wait 1
+    return options, args
 
-  JOB iperf_client dag/iperf_client.sub
-  SCRIPT POST iperf_client dag/iperf_server_stop $RETURN
-  PARENT iperf_server_wait CHILD iperf_client
-
-  JOB iperf_report dag/iperf_report.sub
-  PARENT iperf_client CHILD iperf_report
-
-  VARS iperf_server iperf_server="%(server_machine)s" max_runtime="%(max_runtime)d"
-  VARS iperf_client iperf_server="%(server_machine)s" iperf_client="%(client_machine)s" iperf_client_args="-i 5 -t %(duration)d -p %(port)d"
-
-""" % {"server_machine": options.server_machine,
-       "client_machine": options.client_machine,
-       "duration": options.duration,
-       "max_runtime": options.duration*3,
-       "port": options.port})
-
-#
-# The condor job that runs the iperf server
-#
-server_subfile = os.path.join(dagdir,"iperf_server.sub")
-F = file(server_subfile,"w")
-F.write("""
-
-  requirements = machine == "$(iperf_server)"
-  executable = %(iperf_path)s
-  arguments = -s -p %(port)d
-  output = iperf_server.out
-  error = iperf_server.err
-  log = dag/iperf_server.ulog
-  notification = never
-  should_transfer_files = yes
-  when_to_transfer_output = on_exit
-  want_graceful_removal = true
-  # in case something goes wrong, and iperf_server_stop fails to kill us,
-  # configure a timeout
-  periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > $(max_runtime)
-  queue
-
-""" % {"iperf_path": iperf_path,
-       "port": options.port})
-
-#
-# The condor job that runs the iperf server
-#
-server_wait_subfile = os.path.join(dagdir,"iperf_server_wait.sub")
-F = file(server_wait_subfile,"w")
-F.write("""
-
-  universe = local
-  executable = dag/iperf_server_wait
-  arguments = dag/iperf_server.ulog
-  output = iperf_server_wait.out
-  error = iperf_server_wait.err
-  log = dag/iperf_server_wait.ulog
-  notification = never
-  queue
-
-""")
-
-#
-# The condor job that runs the iperf client
-#
-client_subfile = os.path.join(dagdir,"iperf_client.sub")
-F = file(client_subfile,"w")
-F.write("""
-
-  requirements = machine == "$(iperf_client)"
-  executable = %(iperf_path)s
-  arguments = -c $(iperf_server) $(iperf_client_args)
-  output = iperf_client.out
-  error = iperf_client.err
-  notification = never
-  should_transfer_files = yes
-  when_to_transfer_output = on_exit
-  queue
-
-""" % {"iperf_path": iperf_path})
-
-#
-# The condor job that digests the output of the iperf client
-# and produces a JSON report
-#
-report_subfile = os.path.join(dagdir,"iperf_report.sub")
-F = file(report_subfile,"w")
-F.write("""
-
-  executable = """ + path_to_self + """
-  universe = local
-  arguments = --report-from=iperf_client.out
-  output = iperf_report.out
-  error = iperf_report.err
-  notification = never
-  queue
-
-""")
-
-#
-# The script that waits for the iperf server to start.
-#
-server_wait = os.path.join(dagdir,"iperf_server_wait")
-F = open(server_wait,"w")
-os.chmod(server_wait,0o755)
-F.write("""#!/bin/sh
-
-  die() {
-    echo $1 1>&2
-    exit 1
-  }
-
-  exec >& iperf_server_wait.out
-
-  SERVER_ULOG=$1
-  [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
-
-  JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
-
-  [ "$JOBID" != "" ] || die "Failed to find job id in iperf_server.ulog."
-
-  # while the server job is idle, wait
-  while [ 1 ]; do
-   status="$(condor_q $JOBID -format '%s\n' JobStatus)"
-   if [ "$status" = 1 ]; then   # idle
-     sleep 2
-   elif [ "$status" = 2 ]; then # running
-     break
-   else                         # held? removed?
-     die "Unexpected server job status $status"
-   fi
-  done
-
-  exit 0
-
-""")
-
-#
-# The script that stops the iperf server.
-# The simple thing to do would be to use condor_rm to stop it,
-# but that causes the DAG to be considered a failure, so
-# we use condor_ssh_to_job to send a kill signal instead.
-#
-server_stop = os.path.join(dagdir,"iperf_server_stop")
-F = open(server_stop,"w")
-os.chmod(server_stop,0o755)
-F.write("""#!/bin/sh
-
-  JOB_EXIT_STATUS=$1
-
-  die() {
-    echo $1 1>&2
-    exit 1
-  }
-
-  exec >& iperf_server_stop.out
-
-  SERVER_ULOG=dag/iperf_server.ulog
-  [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
-
-  JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
-
-  [ "$JOBID" != "" ] || die "Failed to find job id in iperf_server.ulog."
-
-  condor_ssh_to_job $JOBID 'kill $_CONDOR_JOB_PIDS'
-
-  exit $JOB_EXIT_STATUS
-
-""")
-
-# submit the DAG to condor
-os.chdir(testdir)
-rc = os.system("condor_submit_dag dag/iperf.dag")
-if rc != 0:
-   sys.exit(1)
+main()
