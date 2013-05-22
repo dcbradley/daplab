@@ -14,9 +14,8 @@ SERVER_ULOG=dag/server.ulog
 
 JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
 
-[ "$JOBID" != "" ] || die "Failed to find job id in socat_server.ulog."
+[ "$JOBID" != "" ] || die "Failed to find job id in server.ulog."
 
 condor_ssh_to_job $JOBID 'kill $_CONDOR_JOB_PIDS'
 
 exit $JOB_EXIT_STATUS
-
