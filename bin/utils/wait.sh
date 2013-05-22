@@ -5,14 +5,14 @@ die() {
   exit 1
 }
 
-exec >& socat_server_wait.out
+exec >& server_wait.out
 
 SERVER_ULOG=$1
 [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
 
 JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
 
-[ "$JOBID" != "" ] || die "Failed to find job id in socat_server.ulog."
+[ "$JOBID" != "" ] || die "Failed to find job id in server.ulog."
 
 # while the server job is idle, wait
 while [ 1 ]; do

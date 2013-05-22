@@ -7,9 +7,9 @@ die() {
   exit 1
 }
 
-exec >& socat_server_stop.out
+exec >& server_stop.out
 
-SERVER_ULOG=dag/socat_server.ulog
+SERVER_ULOG=dag/server.ulog
 [ -f $SERVER_ULOG ] || die "$SERVER_ULOG does not exist in $(pwd)."
 
 JOBID=$(awk '/^000 / {pos=match($2,/[0-9]+\.[0-9]+/); print substr($2,RSTART,RLENGTH)}' $SERVER_ULOG)
