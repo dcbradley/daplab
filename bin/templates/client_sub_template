@@ -1,8 +1,8 @@
 requirements = machine == "{client_machine}"
 executable = {transfer_exec_path}
 arguments = {client_args}
-output = socat_client.out
-error = socat_client.err
+output = {transfer_name}_client.out
+error = {transfer_name}_client.err
 notification = never
 should_transfer_files = yes
 when_to_transfer_output = on_exit
