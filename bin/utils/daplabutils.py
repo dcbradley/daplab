@@ -8,7 +8,7 @@ import sys
 def get_missing_opts(given_options):
     required_options = [
                         'server_machine', 'client_machine', 'server_args', 'client_args',
-                        'transfer_exec_path', 'transfer_name', 'reporter_exec_path', 
+                        'transfer_exec_path', 'transfer_name', 'reporter_exec_path', 'reporter_args', 
                         'wait_script', 'stop_script', 'base_submit_dir', 'template_dir'
                        ]
 
@@ -31,6 +31,7 @@ def add_common_options(parser, defaults):
     parser.add_option("--client-args", default=defaults['client_args'])
 
     parser.add_option("--reporter-exec-path", default=defaults['reporter_exec_path'], help="Path of reporter script")
+    parser.add_option("--reporter-args", default=defaults['reporter_args'], help='Arguments provided to reporter script')
     parser.add_option("--wait-script", default=defaults['wait_script'], help="Path of wait script")
     parser.add_option("--stop-script", default=defaults['stop_script'], help="Path of stop script")
 
