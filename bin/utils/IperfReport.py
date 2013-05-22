@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 
 import sys
 import re
@@ -58,3 +59,7 @@ class IperfReport:
 
     def toPrettyJSON(self):
         return json.dumps(self.report,sort_keys=True, indent=4)
+
+if __name__=='__main__':
+    report = IperfReport(sys.argv[1])
+    print report.toPrettyJSON()
