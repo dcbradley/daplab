@@ -26,6 +26,7 @@ def add_common_options(parser, defaults):
     parser.add_option("--base-submit-dir", default=defaults['base_submit_dir'])
     parser.add_option("--template-dir", default=defaults['template_dir'], help="Path of dir containing templates")
 
+    parser.add_option("--transfer_name", default=defaults['transfer_name'], help="Name of transfer executable used to label tests")
     parser.add_option("--transfer-exec-path", default=defaults['transfer_exec_path'], help="Path of transfer executable")
     parser.add_option("--server-args", default=defaults['server_args'])
     parser.add_option("--client-args", default=defaults['client_args'])
@@ -59,12 +60,11 @@ def create_dirs(options):
     options['dagdir'] = dagdir
 
 def fill_templates(options):
-    name = options['transfer_name']
-    options['dagfile'] = create_from_template('dag_template', name+'.dag', options)
-    options['server_subfile'] = create_from_template('server_sub_template', name+'_server.sub', options)
-    options['client_subfile'] = create_from_template('client_sub_template', name+'_client.sub', options)
-    options['wait_subfile'] = create_from_template('wait_sub_template', name+'_server_wait.sub', options)
-    options['report_subfile'] = create_from_template('report_sub_template', name+'_report.sub', options)
+    options['dagfile'] = create_from_template('dag_template', 'dagfile', options)
+    options['server_subfile'] = create_from_template('server_sub_template', 'server.sub', options)
+    options['client_subfile'] = create_from_template('client_sub_template', 'client.sub', options)
+    options['wait_subfile'] = create_from_template('wait_sub_template', 'server_wait.sub', options)
+    options['report_subfile'] = create_from_template('report_sub_template', 'report.sub', options)
 
 def create_from_template(template_name, output_file_name, options):
     # Read the content of the template file into the variable template
