@@ -24,6 +24,8 @@ def get_opts():
     bin_dir = os.path.dirname(path_to_self)
     util_dir = pathjoin(bin_dir, 'utils')
 
+    transfer_name = 'iperf'
+
     # Set default values
     defaults = {}
 
@@ -33,14 +35,15 @@ def get_opts():
     defaults['base_submit_dir']    = os.getcwd()
     defaults['template_dir']       = pathjoin(bin_dir, 'templates')
 
-    defaults['transfer_exec_path'] = which("iperf")
+    defaults['transfer_name']      = transfer_name
+    defaults['transfer_exec_path'] = which(transfer_name)
     defaults['server_args']        = None
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'IperfReport.py')
     defaults['reporter_args']      = 'iperf_client.out'
-    defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
-    defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
+    defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
+    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
 
     defaults['duration']           = 30
     defaults['port']               = 5001
@@ -57,7 +60,6 @@ def get_opts():
     options = options.__dict__
 
     # Add options that were not explicitly in the command line args
-    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
     options['server_args'] = '-s -p {port}'.format(**options)
     options['client_args'] = '-c {server_machine} -i 5 -t {duration} -p {port}'.format(**options)
 

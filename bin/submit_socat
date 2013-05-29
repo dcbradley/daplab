@@ -18,11 +18,13 @@ def main():
     create_dirs(options)
     fill_templates(options)
     submit_dag(options)
-    
+
 def get_opts():
     path_to_self = os.path.realpath(__file__)
     bin_dir = os.path.dirname(path_to_self)
     util_dir = pathjoin(bin_dir, 'utils')
+
+    transfer_name = 'socat'
 
     # Set default values
     defaults = {}
@@ -33,16 +35,17 @@ def get_opts():
     defaults['base_submit_dir']    = os.getcwd()
     defaults['template_dir']       = pathjoin(bin_dir, 'templates')
 
-    defaults['transfer_exec_path'] = which("socat")
+    defaults['transfer_name']      = transfer_name
+    defaults['transfer_exec_path'] = which(transfer_name)
     defaults['server_args']        = None
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'SocatReport.py')
-    defaults['reporter_args']      = 'socat_server.err'
-    defaults['wait_script']        = pathjoin(util_dir, 'wait.sh')
-    defaults['stop_script']        = pathjoin(util_dir, 'stop.sh')
+    defaults['reporter_args']      = 'server.err'
+    defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
+    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
 
-    defaults['port']               = 5001
+    defaults['port']               = 50010
     defaults['server_address']     = "/tmp/server_file"
     defaults['client_address']     = "./client_file"
 
@@ -59,7 +62,6 @@ def get_opts():
     options = options.__dict__
 
     # Add options that were not explicitly in the command line args
-    options['transfer_name'] = os.path.basename(options['transfer_exec_path'])
     options['server_args'] = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options)
     options['client_args'] = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options)
 
