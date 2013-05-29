@@ -1,8 +1,10 @@
 requirements = machine == "{client_machine}"
 executable = {transfer_exec_path}
 arguments = {client_args}
-output = {transfer_name}_client.out
-error = {transfer_name}_client.err
+output = client.out
+error = client.err
+log = dag/client.ulog
+log_xml = True
 notification = never
 should_transfer_files = yes
 when_to_transfer_output = on_exit

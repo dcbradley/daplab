@@ -1,11 +1,11 @@
-JOB {transfer_name}_server dag/{transfer_name}_server.sub
+JOB server dag/server.sub
 
-JOB {transfer_name}_server_wait dag/{transfer_name}_server_wait.sub
-ABORT-DAG-ON {transfer_name}_server_wait 1
+JOB server_wait dag/server_wait.sub
+ABORT-DAG-ON server_wait 1
 
-JOB {transfer_name}_client dag/{transfer_name}_client.sub
-SCRIPT POST {transfer_name}_client {stop_script} $RETURN
-PARENT {transfer_name}_server_wait CHILD {transfer_name}_client
+JOB client dag/client.sub
+SCRIPT POST client {stop_script} $RETURN
+PARENT server_wait CHILD client
 
-JOB {transfer_name}_report dag/{transfer_name}_report.sub
-PARENT {transfer_name}_client CHILD {transfer_name}_report
+JOB report dag/report.sub
+PARENT client CHILD report

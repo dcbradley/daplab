@@ -1,9 +1,10 @@
 requirements = machine == "{server_machine}"
 executable = {transfer_exec_path}
 arguments = {server_args}
-output = {transfer_name}_server.out
-error = {transfer_name}_server.err
+output = server.out
+error = server.err
 log = dag/server.ulog
+log_xml = True
 notification = never
 should_transfer_files = yes
 when_to_transfer_output = on_exit
