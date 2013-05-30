@@ -3,13 +3,13 @@
 from optparse import OptionParser
 import os
 from os.path import join as pathjoin
+import re
 import sys
 
 def get_missing_opts(given_options):
-    required_options = [
-                        'server_machine', 'client_machine', 'server_args', 'client_args',
-                        'transfer_exec_path', 'transfer_name', 'reporter_exec_path', 'reporter_args', 
-                        'wait_script', 'stop_script', 'base_submit_dir', 'template_dir'
+    required_options = ['server_machine', 'client_machine', 'submit_dir', 'dag_template',
+                        'transfer_name', 'transfer_exec_path', 'server_args', 'client_args',
+                        'reporter_exec_path', 'reporter_args', 'wait_script'
                        ]
 
     given_keys = given_options.keys()
@@ -20,27 +20,27 @@ def get_missing_opts(given_options):
     return required_options
 
 def add_common_options(parser, defaults):
-    parser.add_option("--server-machine", default=defaults['server_machine'])
-    parser.add_option("--client-machine", default=defaults['client_machine'])
+    parser.add_option("--server-machine",     default=defaults['server_machine'],     help='The network address of the server machine')
+    parser.add_option("--client-machine",     default=defaults['client_machine'],     help='The network address of the client machine')
 
-    parser.add_option("--base-submit-dir", default=defaults['base_submit_dir'])
-    parser.add_option("--template-dir", default=defaults['template_dir'], help="Path of dir containing templates")
+    parser.add_option("--submit-dir",         default=defaults['submit_dir'],         help='The directory to write test data to')
+    parser.add_option("--dag-template",       default=defaults['dag_template'],       help='Template to create DAG file from')
 
-    parser.add_option("--transfer_name", default=defaults['transfer_name'], help="Name of transfer executable used to label tests")
-    parser.add_option("--transfer-exec-path", default=defaults['transfer_exec_path'], help="Path of transfer executable")
-    parser.add_option("--server-args", default=defaults['server_args'])
-    parser.add_option("--client-args", default=defaults['client_args'])
+    parser.add_option("--transfer-name",      default=defaults['transfer_name'],      help='Name of transfer executable used to label tests')
+    parser.add_option("--transfer-exec-path", default=defaults['transfer_exec_path'], help='Path of transfer executable')
+    parser.add_option("--server-args",        default=defaults['server_args'],        help='Arguments provided to server transfer executable')
+    parser.add_option("--client-args",        default=defaults['client_args'],        help='Arguments provided to client trasnfer executable')
 
     parser.add_option("--reporter-exec-path", default=defaults['reporter_exec_path'], help="Path of reporter script")
-    parser.add_option("--reporter-args", default=defaults['reporter_args'], help='Arguments provided to reporter script')
-    parser.add_option("--wait-script", default=defaults['wait_script'], help="Path of wait script")
-    parser.add_option("--stop-script", default=defaults['stop_script'], help="Path of stop script")
+    parser.add_option("--reporter-args",      default=defaults['reporter_args'],      help='Arguments provided to reporter script')
+
+    parser.add_option("--wait-script",        default=defaults['wait_script'],        help="Path of wait script")
 
 def create_dirs(options):
     # create a new test directory so different tests
     # do not stomp on each other
     testdir_basename = options['transfer_name']+'_test_1'
-    testdir = pathjoin(options['base_submit_dir'], testdir_basename)
+    testdir = pathjoin(options['submit_dir'], testdir_basename)
     i = 1
     while os.path.isdir( testdir ):
         i += 1
@@ -60,27 +60,64 @@ def create_dirs(options):
     options['dagdir'] = dagdir
 
 def fill_templates(options):
-    options['dagfile'] = create_from_template('dag_template', 'dagfile', options)
-    options['server_subfile'] = create_from_template('server_sub_template', 'server.sub', options)
-    options['client_subfile'] = create_from_template('client_sub_template', 'client.sub', options)
-    options['wait_subfile'] = create_from_template('wait_sub_template', 'server_wait.sub', options)
-    options['report_subfile'] = create_from_template('report_sub_template', 'report.sub', options)
+    sub_templates = create_dag_from_template(options['dag_template'], 'dagfile', options)
 
-def create_from_template(template_name, output_file_name, options):
-    # Read the content of the template file into the variable template
-    template_file = pathjoin(options['template_dir'], template_name)
-    with open(template_file) as f:
-        template = f.read()
+    for sub_template_name in sub_templates:
+        right_dot = sub_template_name.rfind('.')
+        output_name = sub_template_name[:right_dot]
+
+        create_sub_from_template(sub_template_name, output_name, options)
+
+def create_dag_from_template(dag_template_name, output_name, options):
+    # Open the dag template and replace any {}'d strings with values from options dict
+    dag_template_path = pathjoin(options['dag_template_dir'], dag_template_name)
+    with open(dag_template_path) as f:
+        dag = f.read()
+
+    dag = dag.format(**options)
+
+    # Find all the sub file templates that will need to be filled to run this dag
+    subfile_pattern = '\w+\.sub\.template'
+    subfile_pattern = re.compile(subfile_pattern)
+
+    sub_templates = []
+    match = subfile_pattern.search(dag)
+    while match:
+        # Add the sub template name to the list of sub templates
+        match_text = match.group()
+        sub_templates.append(match_text)
+
+        # Remove '.template' from filename in the output dag
+        normal_name = match_text.replace('.template', '') 
+        dag = dag.replace(match_text, normal_name)
+
+        # Get the next result
+        match_end = match.end()
+        match = subfile_pattern.search(dag, match_end)
+
+    # Write the filled out dag to the dagdir
+    dag_output_path = pathjoin(options['dagdir'], output_name)
+    with open(dag_output_path, 'w') as f:
+        f.write(dag)
+
+    options['dagfile'] = dag_output_path
+    return sub_templates
+
+def create_sub_from_template(sub_template_name, output_name, options):
+    # Read the content of the template file
+    sub_template_file = pathjoin(options['sub_template_dir'], sub_template_name)
+    with open(sub_template_file) as f:
+        sub_template = f.read()
 
     # Fill in the template with the chosen options
-    output = template.format(**options)
+    sub = sub_template.format(**options)
 
     # Write the filled in template to the dagdir
-    output_file = pathjoin(options['dagdir'], output_file_name)
-    with open(output_file, 'w') as f:
-        f.write(output)
+    sub_output_path = pathjoin(options['dagdir'], output_name)
+    with open(sub_output_path, 'w') as f:
+        f.write(sub)
 
-    return output_file
+    options[output_name] = sub_output_path
 
 def submit_dag(options):
     os.chdir(options['testdir'])
@@ -89,5 +126,3 @@ def submit_dag(options):
     rc = os.system(submit_command)
     if rc != 0:
        sys.exit(1)
-
-
