@@ -17,53 +17,64 @@ def main():
     options, args = get_opts()
     create_dirs(options)
     fill_templates(options)
+#    for key, value in options.items(): print key, '->', value
     submit_dag(options)
 
 def get_opts():
     path_to_self = os.path.realpath(__file__)
     bin_dir = os.path.dirname(path_to_self)
-    util_dir = pathjoin(bin_dir, 'utils')
 
-    transfer_name = 'socat'
+    util_dir         = pathjoin(bin_dir, 'utils')
+    template_dir     = pathjoin(bin_dir, 'templates')
+    dag_template_dir = pathjoin(template_dir, 'dagfiles')
+    sub_template_dir = pathjoin(template_dir, 'subfiles')
 
-    # Set default values
+    parser = OptionParser()
+
+    # Options common to all transfer programs 
     defaults = {}
 
-    defaults['server_machine']     = "komatsu.chtc.wisc.edu"
-    defaults['client_machine']     = "mongo.t2.ucsd.edu"
+    defaults['server_machine']     = 'komatsu.chtc.wisc.edu'
+    defaults['client_machine']     = 'mongo.t2.ucsd.edu'
 
-    defaults['base_submit_dir']    = os.getcwd()
-    defaults['template_dir']       = pathjoin(bin_dir, 'templates')
+    defaults['submit_dir']         = os.getcwd()
+    defaults['dag_template']       = 'server-client.template'
 
-    defaults['transfer_name']      = transfer_name
-    defaults['transfer_exec_path'] = which(transfer_name)
+    defaults['transfer_name']      = 'socat'
+    defaults['transfer_exec_path'] = which( defaults['transfer_name'] )
     defaults['server_args']        = None
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'SocatReport.py')
     defaults['reporter_args']      = 'server.err'
+
     defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
-    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
 
-    defaults['port']               = 50010
-    defaults['server_address']     = "/tmp/server_file"
-    defaults['client_address']     = "./client_file"
-
-    # Add options
-    parser = OptionParser()
     add_common_options(parser, defaults)
 
-    parser.add_option("--server-address", default=defaults['server_address'], help="Address on server to be read from and sent to client")
-    parser.add_option("--client-address", default=defaults['client_address'], help="Address on client to write received data to")
-    parser.add_option("--port", type="int", default=defaults['port'])
+    # Options specific to this script's transfer program
+    defaults['server_address']     = '/tmp/server_file'
+    defaults['client_address']     = './client_file'
+    defaults['port']               = 50010
+
+    parser.add_option('--server-address',   default=defaults['server_address'], help='Address on server to be read from and sent to client')
+    parser.add_option('--client-address',   default=defaults['client_address'], help='Address on client to write received data to')
+    parser.add_option('--port', type='int', default=defaults['port'],           help='The port to use when transfering files')
 
     # Parse command line args and turn options object into plain dict, for simplicity and compatibility
     options, args = parser.parse_args()
     options = options.__dict__
 
+
     # Add options that were not explicitly in the command line args
-    options['server_args'] = "-u -d -d -d -lu {server_address} TCP-LISTEN:{port}".format(**options)
-    options['client_args'] = "-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}".format(**options)
+    options['server_args']      = '-u -d -d -d -lu {server_address} TCP-LISTEN:{port}'.format(**options)
+    options['client_args']      = '-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}'.format(**options)
+
+    options['bin_dir']          = bin_dir
+    options['util_dir']         = util_dir
+    options['template_dir']     = template_dir
+    options['dag_template_dir'] = dag_template_dir
+    options['sub_template_dir'] = sub_template_dir
 
     # Make sure all options needed for program execution have values
     missing_opts = get_missing_opts(options)

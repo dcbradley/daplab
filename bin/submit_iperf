@@ -22,46 +22,57 @@ def main():
 def get_opts():
     path_to_self = os.path.realpath(__file__)
     bin_dir = os.path.dirname(path_to_self)
-    util_dir = pathjoin(bin_dir, 'utils')
 
-    transfer_name = 'iperf'
+    util_dir         = pathjoin(bin_dir, 'utils')
+    template_dir     = pathjoin(bin_dir, 'templates')
+    dag_template_dir = pathjoin(template_dir, 'dagfiles')
+    sub_template_dir = pathjoin(template_dir, 'subfiles')
 
-    # Set default values
+    parser = OptionParser()
+
+    # Options common to all transfer programs
     defaults = {}
 
-    defaults['server_machine']     = "komatsu.chtc.wisc.edu"
-    defaults['client_machine']     = "mongo.t2.ucsd.edu"
+    defaults['server_machine']     = 'komatsu.chtc.wisc.edu'
+    defaults['client_machine']     = 'mongo.t2.ucsd.edu'
 
-    defaults['base_submit_dir']    = os.getcwd()
-    defaults['template_dir']       = pathjoin(bin_dir, 'templates')
+    defaults['submit_dir']         = os.getcwd()
+    defaults['dag_template']       = pathjoin(dag_template_dir, 'server-client-stop-server.template')
 
-    defaults['transfer_name']      = transfer_name
-    defaults['transfer_exec_path'] = which(transfer_name)
+    defaults['transfer_name']      = 'iperf'
+    defaults['transfer_exec_path'] = which( defaults['transfer_name'] )
     defaults['server_args']        = None
     defaults['client_args']        = None
 
     defaults['reporter_exec_path'] = pathjoin(util_dir, 'IperfReport.py')
-    defaults['reporter_args']      = 'iperf_client.out'
+    defaults['reporter_args']      = 'client.out'
+
     defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
-    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
 
-    defaults['duration']           = 30
-    defaults['port']               = 5001
-
-    # Add options
-    parser = OptionParser()
     add_common_options(parser, defaults)
 
-    parser.add_option("--duration", default=defaults['duration'])
-    parser.add_option("--port", type="int", default=defaults['port'])
+    # Options specific to this script's transfer program
+    defaults['duration']           = 30
+    defaults['port']               = 5001
+    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
 
-    # Parse command line args and turn options object into plain dict, for simplicity and compatibility
+    parser.add_option('--duration',         default=defaults['duration'],    help='The duration of the test')
+    parser.add_option('--port', type='int', default=defaults['port'],        help='The port to use for network transfer')
+    parser.add_option('--stop-script',      default=defaults['stop_script'], help='The script to stop the server once all data has been served')
+
+    # Parse command line args 
     options, args = parser.parse_args()
     options = options.__dict__
 
     # Add options that were not explicitly in the command line args
-    options['server_args'] = '-s -p {port}'.format(**options)
-    options['client_args'] = '-c {server_machine} -i 5 -t {duration} -p {port}'.format(**options)
+    options['server_args']      = '-s -p {port}'.format(**options)
+    options['client_args']      = '-c {server_machine} -i 5 -t {duration} -p {port}'.format(**options)
+
+    options['bin_dir']          = bin_dir
+    options['util_dir']         = util_dir
+    options['template_dir']     = template_dir
+    options['dag_template_dir'] = dag_template_dir
+    options['sub_template_dir'] = sub_template_dir
 
     # Make sure all options needed for program execution have values
     missing_opts = get_missing_opts(options)
