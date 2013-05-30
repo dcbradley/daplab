@@ -1,0 +1,10 @@
+JOB server dag/server.sub.template
+
+JOB server_wait dag/wait.sub.template
+ABORT-DAG-ON server_wait 1
+
+JOB client dag/client.sub.template
+PARENT server_wait CHILD client
+
+JOB report dag/report.sub.template
+PARENT client CHILD report
