@@ -60,13 +60,11 @@ def create_dirs(options):
     options['dagdir'] = dagdir
 
 def fill_templates(options):
-    sub_templates = create_dag_from_template(options['dag_template'], 'dagfile', options)
+    sub_files = create_dag_from_template(options['dag_template'], 'dagfile', options)
 
-    for sub_template_name in sub_templates:
-        right_dot = sub_template_name.rfind('.')
-        output_name = sub_template_name[:right_dot]
-
-        create_sub_from_template(sub_template_name, output_name, options)
+    for sub_file_name in sub_files:
+        sub_template_name = sub_file_name + '.template'
+        create_sub_from_template(sub_template_name, sub_file_name, options)
 
 def create_dag_from_template(dag_template_name, output_name, options):
     # Open the dag template and replace any {}'d strings with values from options dict
@@ -77,19 +75,15 @@ def create_dag_from_template(dag_template_name, output_name, options):
     dag = dag.format(**options)
 
     # Find all the sub file templates that will need to be filled to run this dag
-    subfile_pattern = '\w+\.sub\.template'
+    subfile_pattern = '\w+\.sub'
     subfile_pattern = re.compile(subfile_pattern)
 
-    sub_templates = []
+    sub_files = []
     match = subfile_pattern.search(dag)
     while match:
         # Add the sub template name to the list of sub templates
         match_text = match.group()
-        sub_templates.append(match_text)
-
-        # Remove '.template' from filename in the output dag
-        normal_name = match_text.replace('.template', '') 
-        dag = dag.replace(match_text, normal_name)
+        sub_files.append(match_text)
 
         # Get the next result
         match_end = match.end()
@@ -101,7 +95,7 @@ def create_dag_from_template(dag_template_name, output_name, options):
         f.write(dag)
 
     options['dagfile'] = dag_output_path
-    return sub_templates
+    return sub_files
 
 def create_sub_from_template(sub_template_name, output_name, options):
     # Read the content of the template file

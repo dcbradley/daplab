@@ -38,7 +38,7 @@ def get_opts():
     defaults['client_machine']     = 'mongo.t2.ucsd.edu'
 
     defaults['submit_dir']         = os.getcwd()
-    defaults['dag_template']       = 'server-client.template'
+    defaults['dag_template']       = 'server-client.dag'
 
     defaults['transfer_name']      = 'socat'
     defaults['transfer_exec_path'] = which( defaults['transfer_name'] )

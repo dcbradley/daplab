@@ -1,0 +1,10 @@
+JOB server dag/server.sub
+
+JOB server_wait dag/wait.sub
+ABORT-DAG-ON server_wait 1
+
+JOB client dag/client.sub
+PARENT server_wait CHILD client
+
+JOB report dag/report.sub
+PARENT client CHILD report
