@@ -5,28 +5,41 @@ import os
 import sys
 from datetime import datetime
 
-def create_report(inputFile):
-    # make sure input file is readable
-    if not os.access(inputFile, os.R_OK):
-        print 'Cannot open {file} for reading'.format(file=inputFile)
+from reportutils import create_node_report
+
+def create_reports(testdir):
+    # make sure input dir exists
+    if not os.path.exists(testdir):
+        print 'Test directory {dir} does not seem to exist'.format(dir=testdir)
         return
 
     # the dicts to hold data parsed from files
     transfer_data = {'start':0, 'stop':0, 'bytes':0}
+    nodes = {}
 
-    # iterate over the lines of the file until all sought data is found
-    with open(inputFile) as f:
+    # Set needed paths
+    dag_dir = os.path.join(testdir, 'dag')
+    report_dir = os.path.join(testdir, 'report')
+
+    transfer_report_file = os.path.join(report_dir, 'transfer_report')
+
+    # Create the DAG node report
+    create_node_report(testdir, nodes)
+
+    # Create transfer data report in JSON format
+    server_err_file = os.path.join(testdir, 'server.err')
+    with open(server_err_file) as f:
         for line in f:
-            _parse(line, transfer_data)
+            parse_err_line(line, transfer_data)
             if all( transfer_data.values() ): break
 
-    # organize data into its final json format 
     duration = transfer_data['stop'] - transfer_data['start']
     json_data = {'duration':duration, 'bytes':transfer_data['bytes']}
 
-    return json.dumps(json_data)
+    with open(transfer_report_file, 'w') as transfer_report:
+        transfer_report.write( json.dumps(json_data) )
 
-def _parse(line, transfer_data):
+def parse_err_line(line, transfer_data):
     # split the line into tokens seperated by whitespace
     line = line.split()
     time = line[0]+' '+line[1]
@@ -55,4 +68,4 @@ def _to_unix_time(date_string):
     return float(stamp)
 
 if __name__ == '__main__':
-    print create_report(sys.argv[1])
+    create_reports(sys.argv[1])
