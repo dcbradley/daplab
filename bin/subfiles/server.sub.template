@@ -11,5 +11,5 @@ when_to_transfer_output = on_exit
 want_graceful_removal = true
 # in case something goes wrong, and server_stop fails to kill us,
 # configure a timeout
-periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > 600
+periodic_remove = JobStatus == 2 && CurrentTime - EnteredCurrentStatus > {timeout}
 queue

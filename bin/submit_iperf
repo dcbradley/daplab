@@ -54,6 +54,7 @@ def get_opts():
     # Transfer specific values
     defaults['port'] = 55555
     defaults['duration'] = 30
+    defaults['timeout'] = 86400
 
     options = SubmitParser(defaults).parse()
     return options

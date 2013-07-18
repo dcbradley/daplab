@@ -8,3 +8,4 @@
 {stop_script}        location of the script used to stop the server
 {wait_script}        location of the script used to make the server wait until the client is ready
 {transfer_name}      the name of the transfer executable
+{timeout}            the amount of time to let the server wait for the client to start before giving up

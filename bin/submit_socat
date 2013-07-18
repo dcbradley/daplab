@@ -43,7 +43,7 @@ def get_opts():
 
     # DAG specific values
     defaults['server_machine'] = 'komatsu.chtc.wisc.edu'
-    defaults['client_machine'] = 'komatsu.chtc.wisc.edu'
+    defaults['client_machine'] = 'mongo.t2.ucsd.edu'
 
     defaults['server_args'] = '-u -d -d -d -lu /tmp/server_file TCP-LISTEN:{port}'
     defaults['client_args'] = '-u -d -d -d -lu TCP:{server_machine}:{port} ./client_file'
@@ -53,6 +53,7 @@ def get_opts():
 
     # Transfer specific values
     defaults['port'] = 55555
+    defaults['timeout'] = 86400
 
     options = SubmitParser(defaults).parse()
     return options
