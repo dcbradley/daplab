@@ -1,88 +1,60 @@
 #!/usr/bin/env python
 
-from optparse import OptionParser
 import os
-from os.path import join as pathjoin
 import sys
+from time import sleep
 
 # find utils directory so imports can be made from there
-self_dir = os.path.dirname(__file__)
-util_dir = pathjoin(self_dir, 'utils')
-sys.path.append(util_dir)
+this_dir = os.path.dirname( os.path.realpath(__file__) )
+sys.path.append( os.path.join(this_dir, 'utils') )
 
-from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts, add_common_options
+from daplabutils import create_dirs, fill_test_dir, submit_dag, show_condor_q, dag_is_done, normalize_path
+from opt_parse import SubmitParser
 from which import which
 
 def main():
-    options, args = get_opts()
+    options = get_opts()
+
     create_dirs(options)
-    fill_templates(options)
-#    for key, value in options.items(): print key, '->', value
+    fill_test_dir(options)
+
     submit_dag(options)
+    try:
+        sleep(5) # give dagman time to set up files
+
+        while not dag_is_done(options['test_dir'], options['dag']):
+            show_condor_q(1)
+    except KeyboardInterrupt:
+        sys.exit()
 
 def get_opts():
-    path_to_self = os.path.realpath(__file__)
-    bin_dir = os.path.dirname(path_to_self)
+    self_path = os.path.realpath(__file__)
+    bin_dir = os.path.dirname(self_path)
 
-    util_dir         = pathjoin(bin_dir, 'utils')
-    template_dir     = pathjoin(bin_dir, 'templates')
-    dag_template_dir = pathjoin(template_dir, 'dagfiles')
-    sub_template_dir = pathjoin(template_dir, 'subfiles')
-
-    parser = OptionParser()
-
-    # Options common to all transfer programs 
     defaults = {}
 
-    defaults['server_machine']     = 'komatsu.chtc.wisc.edu'
-    defaults['client_machine']     = 'mongo.t2.ucsd.edu'
+    # General default values
+    defaults['dag'] = normalize_path('server-client.dag', bin_dir)
 
-    defaults['submit_dir']         = os.getcwd()
-    defaults['dag_template']       = 'server-client.dag'
+    defaults['submit_dir'] = os.getcwd()
 
-    defaults['transfer_name']      = 'socat'
-    defaults['transfer_exec_path'] = which( defaults['transfer_name'] )
-    defaults['server_args']        = None
-    defaults['client_args']        = None
+    defaults['transfer_name'] = 'socat'
+    defaults['transfer_exec'] = which( defaults['transfer_name'] )
 
-    defaults['reporter_exec_path'] = pathjoin(util_dir, 'SocatReport.py')
-    defaults['reporter_args']      = 'server.err'
+    # DAG specific values
+    defaults['server_machine'] = 'komatsu.chtc.wisc.edu'
+    defaults['client_machine'] = 'komatsu.chtc.wisc.edu'
 
-    defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
+    defaults['server_args'] = '-u -d -d -d -lu /tmp/server_file TCP-LISTEN:{port}'
+    defaults['client_args'] = '-u -d -d -d -lu TCP:{server_machine}:{port} ./client_file'
 
-    add_common_options(parser, defaults)
+    defaults['reporter_exec'] = normalize_path('SocatReport.py', bin_dir)
+    defaults['reporter_args'] = '{dag_name}.nodes.log server.err'
 
-    # Options specific to this script's transfer program
-    defaults['server_address']     = '/tmp/server_file'
-    defaults['client_address']     = './client_file'
-    defaults['port']               = 50010
+    # Transfer specific values
+    defaults['port'] = 55555
 
-    parser.add_option('--server-address',   default=defaults['server_address'], help='Address on server to be read from and sent to client')
-    parser.add_option('--client-address',   default=defaults['client_address'], help='Address on client to write received data to')
-    parser.add_option('--port', type='int', default=defaults['port'],           help='The port to use when transfering files')
-
-    # Parse command line args and turn options object into plain dict, for simplicity and compatibility
-    options, args = parser.parse_args()
-    options = options.__dict__
-
-
-    # Add options that were not explicitly in the command line args
-    options['server_args']      = '-u -d -d -d -lu {server_address} TCP-LISTEN:{port}'.format(**options)
-    options['client_args']      = '-u -d -d -d -lu TCP:{server_machine}:{port} {client_address}'.format(**options)
-
-    options['bin_dir']          = bin_dir
-    options['util_dir']         = util_dir
-    options['template_dir']     = template_dir
-    options['dag_template_dir'] = dag_template_dir
-    options['sub_template_dir'] = sub_template_dir
-
-    # Make sure all options needed for program execution have values
-    missing_opts = get_missing_opts(options)
-    if missing_opts:
-        print 'Missing values for the following options:'
-        for opt in missing_opts: print opt
-        sys.exit(1)
-
-    return options, args
+    options = SubmitParser(defaults).parse()
+    return options
 
 main()

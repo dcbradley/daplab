@@ -1,0 +1,9 @@
+universe = local
+executable = {wait_script}
+arguments = server.ulog
+output = server_wait.out
+error = server_wait.err
+log = server_wait.ulog
+log_xml = True
+notification = never
+queue

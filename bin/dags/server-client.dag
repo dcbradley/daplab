@@ -1,0 +1,6 @@
+JOB server server.sub
+
+JOB client client.sub
+SCRIPT PRE client wait.py server.ulog
+
+FINAL reporter reporter.sub

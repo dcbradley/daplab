@@ -1,86 +1,61 @@
 #!/usr/bin/env python
 
-from optparse import OptionParser
 import os
-from os.path import join as pathjoin
 import sys
+from time import sleep
 
 # find utils directory so imports can be made from there
-self_dir = os.path.dirname(__file__)
-util_dir = pathjoin(self_dir, 'utils')
-sys.path.append(util_dir)
+this_dir = os.path.dirname( os.path.realpath(__file__) )
+sys.path.append( os.path.join(this_dir, 'utils') )
 
-from daplabutils import create_dirs, fill_templates, submit_dag, get_missing_opts, add_common_options
+from daplabutils import create_dirs, fill_test_dir, submit_dag, show_condor_q, dag_is_done, normalize_path
+from opt_parse import SubmitParser
 from which import which
 
 def main():
-    options, args = get_opts()
+    options = get_opts()
+
     create_dirs(options)
-    fill_templates(options)
+    fill_test_dir(options)
+
     submit_dag(options)
-    
+    try:
+        sleep(5) # give dagman time to set up files
+
+        while not dag_is_done(options['test_dir'], options['dag']):
+            show_condor_q(1)
+    except KeyboardInterrupt:
+        sys.exit()
+
 def get_opts():
-    path_to_self = os.path.realpath(__file__)
-    bin_dir = os.path.dirname(path_to_self)
+    self_path = os.path.realpath(__file__)
+    bin_dir = os.path.dirname(self_path)
 
-    util_dir         = pathjoin(bin_dir, 'utils')
-    template_dir     = pathjoin(bin_dir, 'templates')
-    dag_template_dir = pathjoin(template_dir, 'dagfiles')
-    sub_template_dir = pathjoin(template_dir, 'subfiles')
-
-    parser = OptionParser()
-
-    # Options common to all transfer programs
     defaults = {}
 
-    defaults['server_machine']     = 'komatsu.chtc.wisc.edu'
-    defaults['client_machine']     = 'mongo.t2.ucsd.edu'
+    # General default values
+    defaults['dag'] = normalize_path('server-client-stop-server.dag', bin_dir)
 
-    defaults['submit_dir']         = os.getcwd()
-    defaults['dag_template']       = pathjoin(dag_template_dir, 'server-client-stop-server.template')
+    defaults['submit_dir'] = os.getcwd()
 
-    defaults['transfer_name']      = 'iperf'
-    defaults['transfer_exec_path'] = which( defaults['transfer_name'] )
-    defaults['server_args']        = None
-    defaults['client_args']        = None
+    defaults['transfer_name'] = 'iperf'
+    defaults['transfer_exec'] = which( defaults['transfer_name'] )
 
-    defaults['reporter_exec_path'] = pathjoin(util_dir, 'IperfReport.py')
-    defaults['reporter_args']      = 'client.out'
+    # DAG specific values
+    defaults['server_machine'] = 'komatsu.chtc.wisc.edu'
+    defaults['client_machine'] = 'komatsu.chtc.wisc.edu'
 
-    defaults['wait_script']        = pathjoin(util_dir, 'wait.py')
+    defaults['server_args'] = '-s -p {port}'
+    defaults['client_args'] = '-c {server_machine} -i 5 -t {duration} -p {port}'
 
-    add_common_options(parser, defaults)
+    defaults['reporter_exec'] = normalize_path('IperfReport.py', bin_dir)
+    defaults['reporter_args'] = '{dag_name}.nodes.log client.out'
 
-    # Options specific to this script's transfer program
-    defaults['duration']           = 30
-    defaults['port']               = 5001
-    defaults['stop_script']        = pathjoin(util_dir, 'stop.py')
+    # Transfer specific values
+    defaults['port'] = 55555
+    defaults['duration'] = 30
 
-    parser.add_option('--duration',         default=defaults['duration'],    help='The duration of the test')
-    parser.add_option('--port', type='int', default=defaults['port'],        help='The port to use for network transfer')
-    parser.add_option('--stop-script',      default=defaults['stop_script'], help='The script to stop the server once all data has been served')
-
-    # Parse command line args 
-    options, args = parser.parse_args()
-    options = options.__dict__
-
-    # Add options that were not explicitly in the command line args
-    options['server_args']      = '-s -p {port}'.format(**options)
-    options['client_args']      = '-c {server_machine} -i 5 -t {duration} -p {port}'.format(**options)
-
-    options['bin_dir']          = bin_dir
-    options['util_dir']         = util_dir
-    options['template_dir']     = template_dir
-    options['dag_template_dir'] = dag_template_dir
-    options['sub_template_dir'] = sub_template_dir
-
-    # Make sure all options needed for program execution have values
-    missing_opts = get_missing_opts(options)
-    if missing_opts:
-        print 'Missing values for the following options:'
-        for opt in missing_opts: print opt
-        sys.exit(1)
-
-    return options, args
+    options = SubmitParser(defaults).parse()
+    return options
 
 main()

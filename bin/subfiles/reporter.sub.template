@@ -1,0 +1,9 @@
+executable = {reporter_exec}
+universe = local
+arguments = {reporter_args}
+output = reporter.out
+error = reporter.err
+log = reporter.ulog
+log_xml = True
+notification = never
+queue

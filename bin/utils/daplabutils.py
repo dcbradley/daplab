@@ -1,122 +1,176 @@
 #!/usr/bin/env python
 
-from optparse import OptionParser
 import os
-from os.path import join as pathjoin
 import re
+import shlex
+from string import Formatter
+from subprocess import Popen, PIPE
 import sys
-
-def get_missing_opts(given_options):
-    required_options = ['server_machine', 'client_machine', 'submit_dir', 'dag_template',
-                        'transfer_name', 'transfer_exec_path', 'server_args', 'client_args',
-                        'reporter_exec_path', 'reporter_args', 'wait_script'
-                       ]
-
-    given_keys = given_options.keys()
-    for given_key in given_keys:
-        if given_key in required_options:
-            required_options.remove(given_key)
-
-    return required_options
-
-def add_common_options(parser, defaults):
-    parser.add_option("--server-machine",     default=defaults['server_machine'],     help='The network address of the server machine')
-    parser.add_option("--client-machine",     default=defaults['client_machine'],     help='The network address of the client machine')
-
-    parser.add_option("--submit-dir",         default=defaults['submit_dir'],         help='The directory to write test data to')
-    parser.add_option("--dag-template",       default=defaults['dag_template'],       help='Template to create DAG file from')
-
-    parser.add_option("--transfer-name",      default=defaults['transfer_name'],      help='Name of transfer executable used to label tests')
-    parser.add_option("--transfer-exec-path", default=defaults['transfer_exec_path'], help='Path of transfer executable')
-    parser.add_option("--server-args",        default=defaults['server_args'],        help='Arguments provided to server transfer executable')
-    parser.add_option("--client-args",        default=defaults['client_args'],        help='Arguments provided to client trasnfer executable')
-
-    parser.add_option("--reporter-exec-path", default=defaults['reporter_exec_path'], help="Path of reporter script")
-    parser.add_option("--reporter-args",      default=defaults['reporter_args'],      help='Arguments provided to reporter script')
-
-    parser.add_option("--wait-script",        default=defaults['wait_script'],        help="Path of wait script")
+from time import sleep
 
 def create_dirs(options):
+    submit_dir = options['submit_dir']
+
     # create a new test directory so different tests
     # do not stomp on each other
-    testdir_basename = options['transfer_name']+'_test_1'
-    testdir = pathjoin(options['submit_dir'], testdir_basename)
+    test_dir_name = options['transfer_name']+'_test_1'
+    test_dir = os.path.join(submit_dir, test_dir_name)
     i = 1
-    while os.path.isdir( testdir ):
+    while os.path.isdir( test_dir ):
         i += 1
-        testdir = testdir[:-1] + str(i)
+        test_dir = test_dir[:-1] + str(i)
 
-    dagdir = pathjoin(testdir,'dag')
-    print 'Using directory', testdir
+    print 'Using directory', test_dir
 
     # This will fail if there is a race and something else created
     # the test directory before we do.  Better to fail than to go
     # ahead and use the same directory as a different test instance.
-    os.mkdir(testdir)
-    os.mkdir(dagdir)
+    os.mkdir(test_dir)
 
     # Add the directories to the options holder
-    options['testdir'] = testdir
-    options['dagdir'] = dagdir
+    options['test_dir'] = test_dir
 
-def fill_templates(options):
-    sub_files = create_dag_from_template(options['dag_template'], 'dagfile', options)
+def fill_test_dir(options):
+    test_dir = options['test_dir']
+    dag = options['dag']
+    subfile_templates = options['subfile_templates']
+    scripts = options['scripts']
 
-    for sub_file_name in sub_files:
-        sub_template_name = sub_file_name + '.template'
-        create_sub_from_template(sub_template_name, sub_file_name, options)
+    output_path = os.path.join(test_dir, os.path.basename(dag))
+    copy_file(dag, output_path)
 
-def create_dag_from_template(dag_template_name, output_name, options):
-    # Open the dag template and replace any {}'d strings with values from options dict
-    dag_template_path = pathjoin(options['dag_template_dir'], dag_template_name)
-    with open(dag_template_path) as f:
-        dag = f.read()
+    for subfile_template in subfile_templates:
+        subfile_name = os.path.basename( subfile_template.replace('.template', '') )
 
-    dag = dag.format(**options)
+        output_path = os.path.join(test_dir, subfile_name)
+        copy_file(subfile_template, output_path, options)
 
-    # Find all the sub file templates that will need to be filled to run this dag
-    subfile_pattern = '\w+\.sub'
-    subfile_pattern = re.compile(subfile_pattern)
+    for script in scripts:
+        script_name = os.path.basename(script)
 
-    sub_files = []
-    match = subfile_pattern.search(dag)
-    while match:
-        # Add the sub template name to the list of sub templates
-        match_text = match.group()
-        sub_files.append(match_text)
-
-        # Get the next result
-        match_end = match.end()
-        match = subfile_pattern.search(dag, match_end)
-
-    # Write the filled out dag to the dagdir
-    dag_output_path = pathjoin(options['dagdir'], output_name)
-    with open(dag_output_path, 'w') as f:
-        f.write(dag)
-
-    options['dagfile'] = dag_output_path
-    return sub_files
-
-def create_sub_from_template(sub_template_name, output_name, options):
-    # Read the content of the template file
-    sub_template_file = pathjoin(options['sub_template_dir'], sub_template_name)
-    with open(sub_template_file) as f:
-        sub_template = f.read()
-
-    # Fill in the template with the chosen options
-    sub = sub_template.format(**options)
-
-    # Write the filled in template to the dagdir
-    sub_output_path = pathjoin(options['dagdir'], output_name)
-    with open(sub_output_path, 'w') as f:
-        f.write(sub)
-
-    options[output_name] = sub_output_path
+        output_path = os.path.join(test_dir, script_name)
+        copy_file(script, output_path)
+        os.chmod(output_path, 0555)
 
 def submit_dag(options):
-    os.chdir(options['testdir'])
+    test_dir = options['test_dir']
+    dag_name = os.path.basename(options['dag'])
 
-    submit_command = 'condor_submit_dag {dagfile}'.format(**options) 
+    output_dag = os.path.join(test_dir, dag_name)
+    submit_command = 'condor_submit_dag {output_dag}'.format(output_dag=output_dag) 
+
+    os.chdir(test_dir)
     rc = os.system(submit_command)
     if rc != 0:
        sys.exit(1)
+
+def show_condor_q(display_time=None):
+    esc = chr(27)
+    clear = lambda: sys.stdout.write( esc + '[J' )
+    curs_up = lambda num: sys.stdout.write( esc + '[{n}A'.format(n=num) )
+
+    cmd = 'condor_q -dag'
+    cmd = shlex.split(cmd)
+    condor_q = Popen(cmd, stdout=PIPE)
+    out, err = condor_q.communicate()
+    
+    if display_time:
+        print out
+        sleep(display_time)
+
+        ln_count = out.count('\n')
+        curs_up(ln_count+1)
+        clear()
+    else:
+        print out
+
+def dag_is_done(test_dir, dagname):
+    dagman_out = '{dagname}.dagman.out'.format(dagname=dagname)
+    dagman_out_name = os.path.basename(dagman_out)
+    dagman_out_file = os.path.join(test_dir, dagman_out_name)
+
+    with open(dagman_out_file) as dag_out:
+        return 'All jobs Completed!' in dag_out.read()
+
+def scripts_from_dag(dagfile):
+    with open(dagfile) as f:
+        dag = f.read()
+
+    script_names = set()
+    for line in dag.splitlines():
+        if line.startswith('SCRIPT'):
+            script_name = line.split()[3]
+            script_names.add(script_name)
+
+    return list(script_names)
+
+def subfiles_from_dag(dagfile):
+    with open(dagfile) as f:
+        dag = f.read()
+
+    sub_re = '\w+.sub'
+    sub_re = re.compile(sub_re)
+
+    subfile_templates = set()
+    match = sub_re.search(dag)
+    while match:
+        match_text = match.group()
+
+        template = match_text+'.template'
+        subfile_templates.add(template)
+
+        match_end_pos = match.end()
+        match = sub_re.search(dag, match_end_pos)
+
+    return list(subfile_templates)
+
+def opts_from_subfiles(subfile_templates):
+    if not isinstance(subfile_templates, list):
+        subfile_templates = [subfile_templates]
+
+    subfile_opts = set()
+    for subfile_template in subfile_templates:
+        with open(subfile_template) as f:
+            template = f.read()
+
+        for _, opt_name, _, _ in Formatter().parse(template):
+            if opt_name:
+                subfile_opts.add(opt_name)
+
+    return list(subfile_opts)
+
+def opts_from_command_line(opt_value_string):
+    if not isinstance(opt_value_string, str):
+        return [opt_value_string]
+
+    options = set()
+    for _, opt_name, _, _ in Formatter().parse(opt_value_string):
+        if opt_name:
+            options.add(opt_name)
+
+    return list(options)
+
+def copy_file(origin_path, output_path, options=None):
+    with open(origin_path) as f:
+        text = f.read()
+
+    if options:
+        text = text.format(**options)
+
+    with open(output_path, 'w') as f:
+        f.write(text)
+
+def normalize_path(sought_file, search_dirs):
+    if os.access(sought_file, os.F_OK):
+        return os.path.realpath(sought_file)
+
+    if isinstance(search_dirs, str):
+        search_dirs = [search_dirs]
+
+    for search_dir in search_dirs:
+        for dirpath, dirnames, filenames in os.walk(search_dir):
+            if sought_file in filenames:
+                return os.path.join(dirpath, sought_file)
+
+    # if nothing was found, just give back the original string
+    return sought_file

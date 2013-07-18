@@ -1,0 +1,11 @@
+requirements = machine == "{client_machine}"
+executable = {transfer_exec}
+arguments = {client_args}
+output = client.out
+error = client.err
+log = client.ulog
+log_xml = True
+notification = never
+should_transfer_files = yes
+when_to_transfer_output = on_exit
+queue
