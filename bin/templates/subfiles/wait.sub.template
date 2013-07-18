@@ -1,9 +1,0 @@
-universe = local
-executable = {wait_script}
-arguments = dag/server.ulog
-output = server_wait.out
-error = server_wait.err
-log = dag/server_wait.ulog
-log_xml = True
-notification = never
-queue

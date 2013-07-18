@@ -1,9 +1,0 @@
-universe = local
-executable = {stop_script}
-arguments = dag/server.ulog
-output = server_stop.out
-error = server_stop.err
-log = dag/server_stop.ulog
-log_xml = True
-notification = never
-queue

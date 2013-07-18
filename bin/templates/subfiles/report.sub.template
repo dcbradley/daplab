@@ -1,9 +1,0 @@
-executable = {reporter_exec_path}
-universe = local
-arguments = {reporter_args}
-output = report.out
-error = report.err
-log = dag/report.ulog
-log_xml = True
-notification = never
-queue
